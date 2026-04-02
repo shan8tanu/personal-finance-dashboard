@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Account {
+  id                  String   @id @default(uuid())
+  name                String
+  type                String   // savings, credit_card
+  accountNumberMasked String
+  bankName            String
+  createdAt           DateTime @default(now())
+
+  transactions        Transaction[]
+  creditCardStatements CreditCardStatement[]
+  pdfUploads          PdfUpload[]
+}
+
+model Transaction {
+  id                    String   @id @default(uuid())
+  accountId             String
+  date                  DateTime
+  description           String
+  amount                Float
+  type                  String   // debit, credit
+  categoryId            String?
+  tag                   String?
+  referenceNumber       String
+  closingBalance        Float?
+  source                String   // pdf_import, sms_webhook, manual
+  counterparty          String?
+  isManuallyCategorized Boolean  @default(false)
+  statementId           String?
+  isInternational       Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  account              Account              @relation(fields: [accountId], references: [id])
+  category             Category?            @relation(fields: [categoryId], references: [id])
+  creditCardStatement  CreditCardStatement? @relation(fields: [statementId], references: [id])
+
+  @@unique([accountId, referenceNumber])
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  type      String   // expense, income, investment, transfer, fee
+  icon      String   @default("circle")
+  color     String   @default("#6B7280")
+  isDefault Boolean  @default(false)
+
+  transactions Transaction[]
+  taggingRules TaggingRule[]
+}
+
+model TaggingRule {
+  id           String   @id @default(uuid())
+  matchPattern String
+  matchField   String   // description, counterparty
+  categoryId   String
+  tagLabel     String?
+  priority     Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  category Category @relation(fields: [categoryId], references: [id])
+}
+
+model CreditCardStatement {
+  id                 String   @id @default(uuid())
+  accountId          String
+  statementDate      DateTime
+  billingPeriodStart DateTime
+  billingPeriodEnd   DateTime
+  totalDue           Float
+  minimumDue         Float
+  dueDate            DateTime
+  rewardPoints       Int      @default(0)
+
+  account      Account       @relation(fields: [accountId], references: [id])
+  transactions Transaction[]
+}
+
+model PdfUpload {
+  id                   String   @id @default(uuid())
+  accountId            String
+  filename             String
+  uploadedAt           DateTime @default(now())
+  transactionsImported Int      @default(0)
+  status               String   @default("processing") // processing, completed, failed
+  errorMessage         String?
+  periodStart          DateTime?
+  periodEnd            DateTime?
+
+  account Account @relation(fields: [accountId], references: [id])
+}
