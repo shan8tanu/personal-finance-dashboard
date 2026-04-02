@@ -6,7 +6,7 @@ function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
 }
 
-const INVESTMENT_CATEGORIES = ["Investment - SIP", "Investment - Mutual Fund", "Investment - PPF", "Investment - RD"];
+const _INVESTMENT_CATEGORIES = ["Investment - SIP", "Investment - Mutual Fund", "Investment - PPF", "Investment - RD"];
 
 export default function Investments() {
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -79,7 +79,7 @@ export default function Investments() {
               <CartesianGrid strokeDasharray="3 3" stroke="#1e2438" />
               <XAxis dataKey="month" tick={{ fill: "#8891a5", fontSize: 12 }} axisLine={{ stroke: "#1e2438" }} tickLine={false} />
               <YAxis tick={{ fill: "#8891a5", fontSize: 12 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: "#1a1f2e", border: "1px solid #2a3350", borderRadius: "8px", fontSize: "13px", color: "#e8eaf0" }} formatter={(value: number) => formatCurrency(value)} />
+              <Tooltip contentStyle={{ background: "#1a1f2e", border: "1px solid #2a3350", borderRadius: "8px", fontSize: "13px", color: "#e8eaf0" }} formatter={(value) => formatCurrency(value as number)} />
               <Bar dataKey="Investment - SIP" name="SIP" fill="#3b82f6" radius={[4, 4, 0, 0]} stackId="a" />
               <Bar dataKey="Investment - Mutual Fund" name="Mutual Fund" fill="#60a5fa" radius={[0, 0, 0, 0]} stackId="a" />
               <Bar dataKey="Investment - PPF" name="PPF" fill="#93c5fd" radius={[0, 0, 0, 0]} stackId="a" />

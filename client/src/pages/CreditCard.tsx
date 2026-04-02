@@ -81,7 +81,7 @@ export default function CreditCard() {
                 </Pie>
                 <Tooltip
                   contentStyle={{ background: "#1a1f2e", border: "1px solid #2a3350", borderRadius: "8px", fontSize: "13px", color: "#e8eaf0" }}
-                  formatter={(value: number) => formatCurrency(value)}
+                  formatter={(value) => formatCurrency(value as number)}
                 />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "12px", color: "#8891a5" }} />
               </PieChart>

@@ -23,7 +23,7 @@ export default function Dashboard() {
   const [categoryData, setCategoryData] = useState<any[]>([]);
   const [trendData, setTrendData] = useState<any[]>([]);
   const [recentTxns, setRecentTxns] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadData();
@@ -133,7 +133,7 @@ export default function Dashboard() {
                     fontSize: "13px",
                     color: "#e8eaf0",
                   }}
-                  formatter={(value: number) => formatCurrency(value)}
+                  formatter={(value) => formatCurrency(value as number)}
                 />
                 <Legend
                   verticalAlign="bottom"
@@ -181,7 +181,7 @@ export default function Dashboard() {
                     fontSize: "13px",
                     color: "#e8eaf0",
                   }}
-                  formatter={(value: number) => formatCurrency(value)}
+                  formatter={(value) => formatCurrency(value as number)}
                 />
                 <Bar dataKey="income" name="Income" fill="#22c55e" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="expenses" name="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />

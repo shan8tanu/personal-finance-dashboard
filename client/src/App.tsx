@@ -16,7 +16,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const [isAuth, setIsAuth] = useState(!!localStorage.getItem("token"));
+  const [_isAuth, setIsAuth] = useState(!!localStorage.getItem("token"));
 
   useEffect(() => {
     const handler = () => setIsAuth(!!localStorage.getItem("token"));
