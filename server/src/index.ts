@@ -20,12 +20,15 @@ const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "http://localhost:5173";
 // Middleware
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, same-origin)
-    if (!origin || origin === ALLOWED_ORIGIN || process.env.NODE_ENV !== "production") {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS: origin ${origin} not allowed`));
-    }
+    // Allow same-origin requests (no origin header) — covers frontend served by Express
+    if (!origin) return callback(null, true);
+    // Allow explicitly configured origin
+    if (origin === ALLOWED_ORIGIN) return callback(null, true);
+    // Allow any trycloudflare.com subdomain (quick tunnels change URL on restart)
+    if (origin.endsWith(".trycloudflare.com")) return callback(null, true);
+    // Allow all origins in dev
+    if (process.env.NODE_ENV !== "production") return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
 }));
