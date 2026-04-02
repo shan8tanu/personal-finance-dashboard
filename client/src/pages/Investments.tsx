@@ -6,7 +6,6 @@ function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
 }
 
-const _INVESTMENT_CATEGORIES = ["Investment - SIP", "Investment - Mutual Fund", "Investment - PPF", "Investment - RD"];
 
 export default function Investments() {
   const [transactions, setTransactions] = useState<any[]>([]);
