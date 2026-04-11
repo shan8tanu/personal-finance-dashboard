@@ -11,32 +11,32 @@ Runs fully locally — your data never leaves your machine.
 ### Dashboard
 > Monthly overview with income/expense/investment cards, interactive spending pie, monthly trend bar chart, top spenders, and quick stats.
 
-![Dashboard](docs/screenshots/dashboard.png)
+![Dashboard](docs/screenshots/dashboard.jpg)
 
 ### Transactions
 > Filterable, sortable table with inline type-toggle (debit↔credit), inline category editing, amount range filter, and delete.
 
-![Transactions](docs/screenshots/transactions.png)
+![Transactions](docs/screenshots/transactions.jpg)
 
 ### Credit Card
 > Statement-level breakdown with spend-by-category donut and per-statement transaction list.
 
-![Credit Card](docs/screenshots/credit-card.png)
+![Credit Card](docs/screenshots/credit-card.jpg)
 
 ### Investments
 > Total portfolio value with monthly contribution chart and per-category (MF / SIP / RD / PPF) transaction drill-down.
 
-![Investments](docs/screenshots/investments.png)
+![Investments](docs/screenshots/investments.jpg)
 
 ### Tagging Rules
 > Keyword → category rules with pattern matching, priority ordering, and one-click bulk re-apply.
 
-![Tagging Rules](docs/screenshots/tagging-rules.png)
+![Tagging Rules](docs/screenshots/tagging-rules.jpg)
 
 ### Settings
 > Category management (create / edit / delete with color picker) and webhook configuration.
 
-![Settings](docs/screenshots/settings.png)
+![Settings](docs/screenshots/settings.jpg)
 
 ---
 
