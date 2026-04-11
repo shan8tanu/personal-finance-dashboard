@@ -12,6 +12,10 @@ router.get("/", async (req: Request, res: Response) => {
     startDate,
     endDate,
     search,
+    minAmount,
+    maxAmount,
+    sortBy,
+    sortDir,
     page = "1",
     limit = "50",
   } = req.query;
@@ -23,7 +27,8 @@ router.get("/", async (req: Request, res: Response) => {
   const where: any = {};
 
   if (accountId) where.accountId = accountId;
-  if (categoryId) where.categoryId = categoryId;
+  if (categoryId === "uncategorized") where.categoryId = null;
+  else if (categoryId) where.categoryId = categoryId;
   if (type) where.type = type;
 
   if (categoryType) {
@@ -43,11 +48,22 @@ router.get("/", async (req: Request, res: Response) => {
     ];
   }
 
+  if (minAmount || maxAmount) {
+    where.amount = {};
+    if (minAmount) where.amount.gte = parseFloat(minAmount as string);
+    if (maxAmount) where.amount.lte = parseFloat(maxAmount as string);
+  }
+
+  // Sort support
+  const allowedSortFields = ["date", "amount", "type", "counterparty"];
+  const orderField = allowedSortFields.includes(sortBy as string) ? (sortBy as string) : "date";
+  const orderDirection = sortDir === "asc" ? "asc" : "desc";
+
   const [transactions, total] = await Promise.all([
     prisma.transaction.findMany({
       where,
       include: { category: true, account: true },
-      orderBy: { date: "desc" },
+      orderBy: { [orderField]: orderDirection },
       skip,
       take: limitNum,
     }),
@@ -68,18 +84,22 @@ router.get("/", async (req: Request, res: Response) => {
 router.get("/summary", async (req: Request, res: Response) => {
   const { month, year } = req.query;
 
-  if (!month || !year) {
-    res.status(400).json({ error: "month and year are required" });
-    return;
+  const where: any = {};
+  if (month && year) {
+    where.date = {
+      gte: new Date(parseInt(year as string), parseInt(month as string) - 1, 1),
+      lte: new Date(parseInt(year as string), parseInt(month as string), 0, 23, 59, 59),
+    };
+  } else if (year) {
+    where.date = {
+      gte: new Date(parseInt(year as string), 0, 1),
+      lte: new Date(parseInt(year as string), 11, 31, 23, 59, 59),
+    };
   }
-
-  const startDate = new Date(parseInt(year as string), parseInt(month as string) - 1, 1);
-  const endDate = new Date(parseInt(year as string), parseInt(month as string), 0, 23, 59, 59);
+  // If neither → all time (no date filter)
 
   const transactions = await prisma.transaction.findMany({
-    where: {
-      date: { gte: startDate, lte: endDate },
-    },
+    where,
     include: { category: true },
   });
 
@@ -110,7 +130,13 @@ router.get("/summary", async (req: Request, res: Response) => {
 
 router.patch("/:id", async (req: Request, res: Response) => {
   const id = req.params.id as string;
-  const { categoryId, tag } = req.body;
+  const { categoryId, tag, type } = req.body;
+
+  // Validate type if provided
+  if (type !== undefined && type !== "debit" && type !== "credit") {
+    res.status(400).json({ error: "type must be 'debit' or 'credit'" });
+    return;
+  }
 
   const data: any = {};
   if (categoryId !== undefined) {
@@ -118,6 +144,7 @@ router.patch("/:id", async (req: Request, res: Response) => {
     data.isManuallyCategorized = true;
   }
   if (tag !== undefined) data.tag = tag;
+  if (type !== undefined) data.type = type;
 
   const transaction = await prisma.transaction.update({
     where: { id },

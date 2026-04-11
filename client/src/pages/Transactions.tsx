@@ -1,282 +1,345 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+const fmt = (n: number) =>
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const YEARS = [2022, 2023, 2024, 2025, 2026];
 
 export default function Transactions() {
+  const now = new Date();
+  const [searchParams] = useSearchParams();
+
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [pagination, setPagination] = useState<any>({});
-  const [categories, setCategories] = useState<any[]>([]);
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [showUpload, setShowUpload] = useState(false);
-  const [editingTx, setEditingTx] = useState<string | null>(null);
+  const [pagination, setPagination]     = useState<any>({});
+  const [categories, setCategories]     = useState<any[]>([]);
 
-  useEffect(() => {
-    api.getCategories().then(setCategories).catch(console.error);
-  }, []);
+  // Filters
+  const [search, setSearch]             = useState("");
+  const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get("filter") === "uncategorized" ? "uncategorized" : "");
+  const [typeFilter, setTypeFilter]     = useState("");
+  const [monthFilter, setMonthFilter]   = useState<number | "">(now.getMonth() + 1);
+  const [yearFilter, setYearFilter]     = useState<number | "">(now.getFullYear());
+  const [minAmount, setMinAmount]       = useState("");
+  const [maxAmount, setMaxAmount]       = useState("");
+  const [page, setPage]                 = useState(1);
+  const [loading, setLoading]           = useState(true);
 
-  useEffect(() => {
-    loadTransactions();
-  }, [page, search, categoryFilter, typeFilter]);
+  // Sort
+  const [sortBy, setSortBy]   = useState("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  async function loadTransactions() {
+  // Inline editing
+  const [editingTx, setEditingTx]   = useState<string | null>(null);
+  const [deletingTx, setDeletingTx] = useState<string | null>(null);
+
+  useEffect(() => { api.getCategories().then(setCategories); }, []);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [search, categoryFilter, typeFilter, monthFilter, yearFilter, minAmount, maxAmount, sortBy, sortDir]);
+
+  useEffect(() => { load(); }, [page, search, categoryFilter, typeFilter, monthFilter, yearFilter, minAmount, maxAmount, sortBy, sortDir]);
+
+  async function load() {
     setLoading(true);
     try {
-      const params: Record<string, string> = { page: String(page), limit: "25" };
-      if (search) params.search = search;
-      if (categoryFilter) params.categoryId = categoryFilter;
-      if (typeFilter) params.type = typeFilter;
+      const p: Record<string, string> = { page: String(page), limit: "50", sortBy, sortDir };
+      if (search)         p.search     = search;
+      if (categoryFilter) p.categoryId = categoryFilter;
+      if (typeFilter)     p.type       = typeFilter;
+      if (minAmount)      p.minAmount  = minAmount;
+      if (maxAmount)      p.maxAmount  = maxAmount;
 
-      const res = await api.getTransactions(params);
+      // Date range
+      if (monthFilter && yearFilter) {
+        p.startDate = new Date(yearFilter as number, (monthFilter as number) - 1, 1).toISOString();
+        p.endDate   = new Date(yearFilter as number, monthFilter as number, 0, 23, 59, 59).toISOString();
+      } else if (yearFilter) {
+        p.startDate = new Date(yearFilter as number, 0, 1).toISOString();
+        p.endDate   = new Date(yearFilter as number, 11, 31, 23, 59, 59).toISOString();
+      }
+
+      const res = await api.getTransactions(p);
       setTransactions(res.transactions);
       setPagination(res.pagination);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   async function updateCategory(txId: string, categoryId: string) {
     await api.updateTransaction(txId, { categoryId });
     setEditingTx(null);
-    loadTransactions();
+    load();
+  }
+
+  async function toggleType(txId: string, currentType: string) {
+    await api.updateTransaction(txId, { type: currentType === "debit" ? "credit" : "debit" });
+    load();
+  }
+
+  async function deleteTx(txId: string) {
+    await api.deleteTransaction(txId);
+    setDeletingTx(null);
+    load();
+  }
+
+  function handleSort(field: string) {
+    if (sortBy === field) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortDir(field === "amount" ? "desc" : "asc");
+    }
+  }
+
+  function clearFilters() {
+    setSearch(""); setCategoryFilter(""); setTypeFilter("");
+    setMonthFilter(""); setYearFilter(""); setMinAmount(""); setMaxAmount("");
+    setSortBy("date"); setSortDir("desc");
+  }
+
+  const hasFilters = search || categoryFilter || typeFilter || minAmount || maxAmount || !monthFilter || !yearFilter;
+
+  function SortHeader({ field, label, align }: { field: string; label: string; align?: string }) {
+    const active = sortBy === field;
+    return (
+      <th
+        onClick={() => handleSort(field)}
+        style={{ ...thStyle, textAlign: (align || "left") as any, cursor: "pointer", userSelect: "none" }}
+      >
+        {label} {active ? (sortDir === "asc" ? "↑" : "↓") : ""}
+      </th>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Bank Transactions</h1>
-          <p className="text-text-muted text-sm mt-0.5">{pagination.total || 0} transactions</p>
+    <div>
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <div className="label" style={{ marginBottom: 4 }}>Bank Account</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: "#f1f5f9" }}>
+            Transactions
+            {pagination.total != null && (
+              <span style={{ fontSize: 15, fontWeight: 400, color: "#64748b", marginLeft: 12 }}>
+                {pagination.total} records
+              </span>
+            )}
+          </h1>
+          {hasFilters && (
+            <button onClick={clearFilters} style={ghostBtn}>Clear all filters</button>
+          )}
         </div>
-        <button
-          onClick={() => setShowUpload(true)}
-          className="bg-accent-blue hover:bg-accent-blue/90 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition"
-        >
-          Upload Statement
-        </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3">
-        <input
-          type="text"
-          placeholder="Search transactions..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="flex-1 bg-surface-secondary border border-border-primary rounded-lg px-3 py-2.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue transition"
-        />
-        <select
-          value={categoryFilter}
-          onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
-          className="bg-surface-secondary border border-border-primary rounded-lg px-3 py-2.5 text-sm text-text-primary focus:outline-none"
-        >
-          <option value="">All Categories</option>
-          {categories.map((c: any) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
+      {/* Filter row 1: date */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <select value={String(monthFilter)} onChange={e => setMonthFilter(e.target.value === "" ? "" : Number(e.target.value))} style={selStyle}>
+          <option value="">All Months</option>
+          {MONTH_NAMES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
         </select>
-        <select
-          value={typeFilter}
-          onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
-          className="bg-surface-secondary border border-border-primary rounded-lg px-3 py-2.5 text-sm text-text-primary focus:outline-none"
-        >
+        <select value={String(yearFilter)} onChange={e => setYearFilter(e.target.value === "" ? "" : Number(e.target.value))} style={selStyle}>
+          <option value="">All Years</option>
+          {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+
+        {/* Quick month jumps */}
+        <div style={{ borderLeft: "1px solid #334155", paddingLeft: 8, marginLeft: 4, display: "flex", gap: 4 }}>
+          {[-2, -1, 0].map(offset => {
+            const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+            const m = d.getMonth() + 1, y = d.getFullYear();
+            const active = monthFilter === m && yearFilter === y;
+            return (
+              <button key={offset} onClick={() => { setMonthFilter(m); setYearFilter(y); }}
+                style={{
+                  padding: "7px 12px", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer",
+                  background: active ? "#3b82f6" : "#1e293b", color: active ? "#fff" : "#94a3b8",
+                }}>
+                {MONTH_NAMES[m - 1]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Filter row 2: search + category + type + amount */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <input type="text" placeholder="Search counterparty or description…" value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
+        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={selStyle}>
+          <option value="">All Categories</option>
+          <option value="uncategorized">⚠ Uncategorized</option>
+          {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={selStyle}>
           <option value="">All Types</option>
           <option value="debit">Debit</option>
           <option value="credit">Credit</option>
         </select>
+        <input type="number" placeholder="Min ₹" value={minAmount}
+          onChange={e => setMinAmount(e.target.value)}
+          style={{ ...inputStyle, width: 100 }} />
+        <input type="number" placeholder="Max ₹" value={maxAmount}
+          onChange={e => setMaxAmount(e.target.value)}
+          style={{ ...inputStyle, width: 100 }} />
       </div>
 
       {/* Table */}
-      <div className="bg-surface-secondary border border-border-primary rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="card" style={{ overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr className="border-b border-border-primary">
-              <th className="text-left px-4 py-3 text-text-muted font-medium text-xs uppercase tracking-wider">Date</th>
-              <th className="text-left px-4 py-3 text-text-muted font-medium text-xs uppercase tracking-wider">Description</th>
-              <th className="text-left px-4 py-3 text-text-muted font-medium text-xs uppercase tracking-wider">Category</th>
-              <th className="text-right px-4 py-3 text-text-muted font-medium text-xs uppercase tracking-wider">Amount</th>
-              <th className="text-right px-4 py-3 text-text-muted font-medium text-xs uppercase tracking-wider">Balance</th>
+            <tr style={{ borderBottom: "1px solid #334155", background: "#1a2a3e" }}>
+              <SortHeader field="date" label="Date" />
+              <th style={thStyle}>Description</th>
+              <th style={thStyle}>Category</th>
+              <SortHeader field="type" label="Type" align="center" />
+              <SortHeader field="amount" label="Amount" align="right" />
+              <th style={{ ...thStyle, width: 70 }} />
             </tr>
           </thead>
-          <tbody className="divide-y divide-border-primary">
-            {transactions.map((tx) => (
-              <tr key={tx.id} className="hover:bg-surface-hover transition">
-                <td className="px-4 py-3 text-text-secondary whitespace-nowrap font-mono text-xs">
-                  {new Date(tx.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" })}
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={6} style={emptyTd}>Loading…</td></tr>
+            ) : transactions.length === 0 ? (
+              <tr><td colSpan={6} style={emptyTd}>No transactions found.</td></tr>
+            ) : transactions.map(tx => (
+              <tr key={tx.id} style={{ borderBottom: "1px solid #1e293b" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "#263244")}
+                onMouseLeave={e => (e.currentTarget.style.background = "")}>
+
+                {/* Date */}
+                <td style={tdStyle}>
+                  <span style={{ color: "#64748b", fontSize: 13, whiteSpace: "nowrap" }}>
+                    {new Date(tx.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" })}
+                  </span>
                 </td>
-                <td className="px-4 py-3">
-                  <div className="text-text-primary">{tx.counterparty || "—"}</div>
-                  <div className="text-text-muted text-xs truncate max-w-xs">{tx.description}</div>
+
+                {/* Description */}
+                <td style={{ ...tdStyle, maxWidth: 340 }}>
+                  <div style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {tx.counterparty || "—"}
+                  </div>
+                  {tx.description && (
+                    <div style={{ color: "#64748b", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
+                      {tx.description.substring(0, 80)}
+                    </div>
+                  )}
                 </td>
-                <td className="px-4 py-3">
+
+                {/* Category — inline editable */}
+                <td style={tdStyle}>
                   {editingTx === tx.id ? (
-                    <select
-                      value={tx.categoryId || ""}
-                      onChange={(e) => updateCategory(tx.id, e.target.value)}
-                      onBlur={() => setEditingTx(null)}
-                      autoFocus
-                      className="bg-surface-tertiary border border-border-accent rounded px-2 py-1 text-xs text-text-primary focus:outline-none"
-                    >
+                    <select value={tx.categoryId || ""}
+                      onChange={e => updateCategory(tx.id, e.target.value)}
+                      onBlur={() => setEditingTx(null)} autoFocus
+                      style={{ ...selStyle, minWidth: 150, padding: "5px 8px" }}>
                       <option value="">Uncategorized</option>
-                      {categories.map((c: any) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
+                      {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   ) : (
-                    <button
-                      onClick={() => setEditingTx(tx.id)}
-                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs hover:bg-surface-tertiary transition"
-                    >
-                      <span
-                        className="w-2 h-2 rounded-full"
-                        style={{ background: tx.category?.color || "#6B7280" }}
-                      />
-                      {tx.category?.name || "Uncategorized"}
+                    <button onClick={() => setEditingTx(tx.id)}
+                      style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: tx.category?.color || "#475569", flexShrink: 0 }} />
+                      <span style={{ color: tx.category ? "#94a3b8" : "#f59e0b", fontSize: 13 }}>
+                        {tx.category?.name || "Uncategorized"}
+                      </span>
                     </button>
                   )}
                 </td>
-                <td className={`px-4 py-3 text-right font-mono tabular-nums font-medium ${tx.type === "credit" ? "text-accent-green" : "text-text-primary"}`}>
-                  {tx.type === "credit" ? "+" : "-"}{formatCurrency(tx.amount)}
+
+                {/* Type — clickable toggle */}
+                <td style={{ ...tdStyle, textAlign: "center" }}>
+                  <button
+                    onClick={() => toggleType(tx.id, tx.type)}
+                    title={`Click to change to ${tx.type === "debit" ? "Credit" : "Debit"}`}
+                    style={{
+                      fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, border: "none", cursor: "pointer",
+                      background: tx.type === "credit" ? "#22c55e22" : "#94a3b811",
+                      color: tx.type === "credit" ? "#22c55e" : "#94a3b8",
+                    }}>
+                    {tx.type === "credit" ? "Credit" : "Debit"}
+                  </button>
                 </td>
-                <td className="px-4 py-3 text-right font-mono tabular-nums text-text-muted text-xs">
-                  {tx.closingBalance ? formatCurrency(tx.closingBalance) : "—"}
+
+                {/* Amount */}
+                <td style={{ ...tdStyle, textAlign: "right" }}>
+                  <span style={{
+                    fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums",
+                    color: tx.type === "credit" ? "#22c55e" : "#f1f5f9"
+                  }}>
+                    {tx.type === "credit" ? "+" : "−"}{fmt(tx.amount)}
+                  </span>
+                </td>
+
+                {/* Actions — delete */}
+                <td style={{ ...tdStyle, textAlign: "center" }}>
+                  {deletingTx === tx.id ? (
+                    <button onClick={() => deleteTx(tx.id)}
+                      style={{ fontSize: 11, fontWeight: 600, color: "#ef4444", background: "none", border: "1px solid #ef444440", borderRadius: 4, padding: "2px 8px", cursor: "pointer" }}>
+                      Confirm
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setDeletingTx(tx.id)}
+                      title="Delete transaction"
+                      style={{ fontSize: 14, background: "none", border: "none", cursor: "pointer", color: "#475569", padding: "2px 6px" }}
+                      onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
+                      onMouseLeave={e => (e.currentTarget.style.color = "#475569")}>
+                      ✕
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        {transactions.length === 0 && (
-          <div className="py-16 text-center text-text-muted text-sm">
-            {loading ? "Loading..." : "No transactions found"}
-          </div>
-        )}
-
         {/* Pagination */}
         {pagination.totalPages > 1 && (
-          <div className="px-4 py-3 border-t border-border-primary flex items-center justify-between">
-            <span className="text-xs text-text-muted">
+          <div style={{
+            padding: "14px 20px", borderTop: "1px solid #334155",
+            display: "flex", alignItems: "center", justifyContent: "space-between"
+          }}>
+            <span style={{ color: "#64748b", fontSize: 13 }}>
               Page {pagination.page} of {pagination.totalPages}
             </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page <= 1}
-                className="px-3 py-1.5 text-xs bg-surface-tertiary rounded-lg text-text-secondary hover:text-text-primary disabled:opacity-40 transition"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setPage(Math.min(pagination.totalPages, page + 1))}
-                disabled={page >= pagination.totalPages}
-                className="px-3 py-1.5 text-xs bg-surface-tertiary rounded-lg text-text-secondary hover:text-text-primary disabled:opacity-40 transition"
-              >
-                Next
-              </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} style={paginBtn(page > 1)}>← Prev</button>
+              <button onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))} disabled={page >= pagination.totalPages} style={paginBtn(page < pagination.totalPages)}>Next →</button>
             </div>
           </div>
         )}
       </div>
-
-      {/* Upload Modal */}
-      {showUpload && <UploadModal onClose={() => setShowUpload(false)} onSuccess={() => { setShowUpload(false); loadTransactions(); }} />}
     </div>
   );
 }
 
-function UploadModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [password, setPassword] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState("");
-  const [type, setType] = useState<"bank" | "cc">("bank");
-
-  async function handleUpload() {
-    if (!file) return;
-    setUploading(true);
-    setError("");
-    try {
-      const res = type === "bank"
-        ? await api.uploadBankStatement(file, password || undefined)
-        : await api.uploadCreditCardStatement(file);
-      setResult(res);
-      setTimeout(onSuccess, 1500);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
-      <div
-        className="bg-surface-secondary border border-border-primary rounded-xl p-6 w-full max-w-md space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-lg font-semibold">Upload Statement</h2>
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => setType("bank")}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${type === "bank" ? "bg-accent-blue text-white" : "bg-surface-tertiary text-text-secondary"}`}
-          >
-            Bank Statement
-          </button>
-          <button
-            onClick={() => setType("cc")}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${type === "cc" ? "bg-accent-blue text-white" : "bg-surface-tertiary text-text-secondary"}`}
-          >
-            Credit Card
-          </button>
-        </div>
-
-        <input
-          type="file"
-          accept=".pdf"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
-          className="w-full text-sm text-text-secondary file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-surface-tertiary file:text-text-primary file:font-medium file:cursor-pointer"
-        />
-
-        {type === "bank" && (
-          <input
-            type="text"
-            placeholder="PDF Password (if encrypted)"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-surface-tertiary border border-border-primary rounded-lg px-3 py-2.5 text-sm text-text-primary placeholder-text-muted focus:outline-none"
-          />
-        )}
-
-        {error && <p className="text-accent-red text-sm">{error}</p>}
-        {result && <p className="text-accent-green text-sm">Imported {result.imported} transactions!</p>}
-
-        <div className="flex gap-3 pt-2">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-surface-tertiary text-text-secondary rounded-lg text-sm hover:text-text-primary transition">
-            Cancel
-          </button>
-          <button
-            onClick={handleUpload}
-            disabled={!file || uploading}
-            className="flex-1 py-2.5 bg-accent-blue text-white rounded-lg text-sm font-medium disabled:opacity-50 transition"
-          >
-            {uploading ? "Uploading..." : "Upload & Parse"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+/* ── styles ──────────────────────────────────── */
+const inputStyle: React.CSSProperties = {
+  background: "#1e293b", border: "1px solid #334155", borderRadius: 8,
+  color: "#f1f5f9", padding: "9px 14px", fontSize: 14, outline: "none",
+  fontFamily: "inherit",
+};
+const selStyle: React.CSSProperties = {
+  background: "#1e293b", border: "1px solid #334155", borderRadius: 8,
+  color: "#94a3b8", padding: "9px 12px", fontSize: 14, outline: "none", cursor: "pointer",
+  fontFamily: "inherit",
+};
+const ghostBtn: React.CSSProperties = {
+  background: "transparent", border: "1px solid #334155", borderRadius: 8,
+  color: "#94a3b8", padding: "7px 14px", fontSize: 13, cursor: "pointer",
+  fontFamily: "inherit",
+};
+const thStyle: React.CSSProperties = {
+  padding: "12px 16px", textAlign: "left",
+  fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b"
+};
+const tdStyle: React.CSSProperties = { padding: "10px 16px", verticalAlign: "middle" };
+const emptyTd: React.CSSProperties = { padding: 48, textAlign: "center", color: "#64748b", fontSize: 14 };
+const paginBtn = (enabled: boolean): React.CSSProperties => ({
+  padding: "7px 14px", borderRadius: 8, background: "#263244", border: "none",
+  color: enabled ? "#94a3b8" : "#475569", fontSize: 13, cursor: enabled ? "pointer" : "not-allowed",
+  opacity: enabled ? 1 : 0.4, fontFamily: "inherit",
+});

@@ -2,27 +2,24 @@ import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
-}
+const fmt = (n: number) =>
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 
+const TIP_STYLE = {
+  background: "#1e293b", border: "1px solid #334155", borderRadius: "8px",
+  fontSize: "13px", color: "#f1f5f9", fontFamily: "Inter, sans-serif",
+};
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 export default function Investments() {
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [trendData, setTrendData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [trendData, setTrendData]       = useState<any[]>([]);
+  const [loading, setLoading]           = useState(true);
 
   useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
-    setLoading(true);
-    try {
-      const res = await api.getTransactions({ categoryType: "investment", limit: "200" });
+    api.getTransactions({ categoryType: "investment", limit: "200" }).then(res => {
       setTransactions(res.transactions);
-
-      // Build monthly breakdown
       const monthly: Record<string, Record<string, number>> = {};
       for (const tx of res.transactions) {
         const d = new Date(tx.date);
@@ -31,90 +28,100 @@ export default function Investments() {
         const cat = tx.category?.name || "Other";
         monthly[key][cat] = (monthly[key][cat] || 0) + tx.amount;
       }
+      setTrendData(Object.entries(monthly).sort(([a],[b]) => a.localeCompare(b)).map(([m, c]) => ({ month: m, ...c })));
+    }).finally(() => setLoading(false));
+  }, []);
 
-      const trend = Object.entries(monthly)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, cats]) => ({ month, ...cats }));
-      setTrendData(trend);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Group by category
-  const grouped: Record<string, { total: number; count: number; transactions: any[] }> = {};
+  const grouped: Record<string, { total: number; count: number; txns: any[] }> = {};
   for (const tx of transactions) {
     const cat = tx.category?.name || "Other";
-    if (!grouped[cat]) grouped[cat] = { total: 0, count: 0, transactions: [] };
+    if (!grouped[cat]) grouped[cat] = { total: 0, count: 0, txns: [] };
     grouped[cat].total += tx.amount;
-    grouped[cat].count += 1;
-    grouped[cat].transactions.push(tx);
+    grouped[cat].count++;
+    grouped[cat].txns.push(tx);
   }
-
-  const totalInvestment = Object.values(grouped).reduce((s, g) => s + g.total, 0);
+  const total = Object.values(grouped).reduce((s, g) => s + g.total, 0);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Investments</h1>
-        <p className="text-text-muted text-sm mt-0.5">SIP, Mutual Funds, PPF & RD tracker</p>
+    <div>
+      <div className="mb-8">
+        <p className="label mb-1">Portfolio</p>
+        <h1 className="text-2xl font-semibold" style={{ color: "var(--color-text)" }}>Investments</h1>
       </div>
 
       {/* Total */}
-      <div className="bg-surface-secondary border border-border-primary rounded-xl p-5">
-        <p className="text-text-muted text-xs font-medium uppercase tracking-wider">Total Invested</p>
-        <p className="text-3xl font-semibold mt-2 tabular-nums text-accent-blue">{formatCurrency(totalInvestment)}</p>
-        <p className="text-text-muted text-sm mt-1">{transactions.length} transactions across {Object.keys(grouped).length} categories</p>
+      <div className="card p-6 mb-7">
+        <p className="label mb-3">Total Invested</p>
+        <p className="text-4xl font-semibold tabular-nums" style={{ color: "var(--color-blue)" }}>{fmt(total)}</p>
+        <p className="text-sm mt-2" style={{ color: "var(--color-text-muted)" }}>
+          {transactions.length} transactions across {Object.keys(grouped).length} categories
+        </p>
       </div>
 
-      {/* Monthly Bar Chart */}
+      {/* Monthly chart */}
       {trendData.length > 0 && (
-        <div className="bg-surface-secondary border border-border-primary rounded-xl p-5">
-          <h2 className="text-sm font-medium text-text-secondary mb-4">Monthly Investment Breakdown</h2>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={trendData} barCategoryGap="15%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e2438" />
-              <XAxis dataKey="month" tick={{ fill: "#8891a5", fontSize: 12 }} axisLine={{ stroke: "#1e2438" }} tickLine={false} />
-              <YAxis tick={{ fill: "#8891a5", fontSize: 12 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: "#1a1f2e", border: "1px solid #2a3350", borderRadius: "8px", fontSize: "13px", color: "#e8eaf0" }} formatter={(value) => formatCurrency(value as number)} />
-              <Bar dataKey="Investment - SIP" name="SIP" fill="#3b82f6" radius={[4, 4, 0, 0]} stackId="a" />
-              <Bar dataKey="Investment - Mutual Fund" name="Mutual Fund" fill="#60a5fa" radius={[0, 0, 0, 0]} stackId="a" />
-              <Bar dataKey="Investment - PPF" name="PPF" fill="#93c5fd" radius={[0, 0, 0, 0]} stackId="a" />
-              <Bar dataKey="Investment - RD" name="RD" fill="#bfdbfe" radius={[4, 4, 0, 0]} stackId="a" />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "12px", color: "#8891a5" }} />
+        <div className="card p-6 mb-7">
+          <p className="font-semibold text-base mb-5" style={{ color: "var(--color-text)" }}>Monthly Breakdown</p>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={trendData} barCategoryGap="25%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <XAxis dataKey="month"
+                tick={{ fill: "#64748b", fontSize: 12, fontFamily: "Inter" }}
+                tickFormatter={v => { const [y,m] = v.split("-"); return `${MONTHS[parseInt(m)-1]} '${y.slice(2)}`; }}
+                axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#64748b", fontSize: 12, fontFamily: "Inter" }}
+                tickFormatter={v => `${(v/1000).toFixed(0)}k`}
+                axisLine={false} tickLine={false} width={40} />
+              <Tooltip contentStyle={TIP_STYLE} formatter={(v) => fmt(v as number)} />
+              <Bar dataKey="Investment - SIP"         name="SIP"         fill="#3b82f6" radius={[4,4,0,0]} stackId="a" />
+              <Bar dataKey="Investment - Mutual Fund" name="Mutual Fund" fill="#06b6d4" radius={[0,0,0,0]} stackId="a" />
+              <Bar dataKey="Investment - PPF"         name="PPF"         fill="#a855f7" radius={[0,0,0,0]} stackId="a" />
+              <Bar dataKey="Investment - RD"          name="RD"          fill="#22c55e" radius={[4,4,0,0]} stackId="a" />
+              <Legend iconType="circle" iconSize={8}
+                wrapperStyle={{ fontSize: "12px", color: "#94a3b8", paddingTop: "12px" }} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {/* Category breakdown */}
-      <div className="grid grid-cols-2 gap-4">
-        {Object.entries(grouped).sort(([,a], [,b]) => b.total - a.total).map(([cat, data]) => (
-          <div key={cat} className="bg-surface-secondary border border-border-primary rounded-xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-text-primary">{cat}</h3>
-              <span className="text-sm font-mono font-semibold text-accent-blue tabular-nums">{formatCurrency(data.total)}</span>
-            </div>
-            <p className="text-xs text-text-muted mb-3">{data.count} transactions</p>
-            <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {data.transactions.slice(0, 10).map((tx: any) => (
-                <div key={tx.id} className="flex justify-between text-xs">
-                  <span className="text-text-secondary">
-                    {new Date(tx.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} · {tx.counterparty || "—"}
-                  </span>
-                  <span className="font-mono tabular-nums text-text-primary">{formatCurrency(tx.amount)}</span>
+      {/* Category cards */}
+      {Object.keys(grouped).length > 0 && (
+        <div>
+          <p className="font-semibold text-base mb-4" style={{ color: "var(--color-text)" }}>By Category</p>
+          <div className="grid grid-cols-2 gap-5">
+            {Object.entries(grouped).sort(([,a],[,b]) => b.total - a.total).map(([cat, data]) => (
+              <div key={cat} className="card p-5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="font-medium text-sm" style={{ color: "var(--color-text)" }}>
+                    {cat.replace("Investment - ", "")}
+                  </p>
+                  <p className="text-lg font-semibold tabular-nums" style={{ color: "var(--color-blue)" }}>
+                    {fmt(data.total)}
+                  </p>
                 </div>
-              ))}
-            </div>
+                <p className="text-xs mb-4" style={{ color: "var(--color-text-muted)" }}>
+                  {data.count} transactions
+                </p>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {data.txns.slice(0, 12).map((tx: any) => (
+                    <div key={tx.id} className="flex justify-between text-xs">
+                      <span style={{ color: "var(--color-text-muted)" }}>
+                        {new Date(tx.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" })}
+                        {tx.counterparty && ` · ${tx.counterparty}`}
+                      </span>
+                      <span className="tabular-nums" style={{ color: "var(--color-text-sub)" }}>{fmt(tx.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
       {transactions.length === 0 && !loading && (
-        <div className="bg-surface-secondary border border-border-primary rounded-xl py-16 text-center text-text-muted text-sm">
-          No investment transactions found. Upload a bank statement to get started.
+        <div className="card py-20 text-center text-sm" style={{ color: "var(--color-text-muted)" }}>
+          No investment transactions found.
         </div>
       )}
     </div>

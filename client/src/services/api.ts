@@ -45,8 +45,12 @@ export const api = {
     const qs = new URLSearchParams(params).toString();
     return request(`/transactions?${qs}`);
   },
-  getTransactionSummary: (month: number, year: number) =>
-    request(`/transactions/summary?month=${month}&year=${year}`),
+  getTransactionSummary: (month?: number, year?: number) => {
+    const params = new URLSearchParams();
+    if (month) params.set("month", String(month));
+    if (year) params.set("year", String(year));
+    return request(`/transactions/summary?${params}`);
+  },
   updateTransaction: (id: string, data: any) =>
     request(`/transactions/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteTransaction: (id: string) =>
@@ -84,10 +88,12 @@ export const api = {
   },
 
   // Analytics
-  getCategoryBreakdown: (month: number, year: number, accountId?: string) => {
-    let url = `/analytics/category-breakdown?month=${month}&year=${year}`;
-    if (accountId) url += `&accountId=${accountId}`;
-    return request(url);
+  getCategoryBreakdown: (month?: number, year?: number, accountId?: string) => {
+    const params = new URLSearchParams();
+    if (month) params.set("month", String(month));
+    if (year) params.set("year", String(year));
+    if (accountId) params.set("accountId", accountId);
+    return request(`/analytics/category-breakdown?${params}`);
   },
   getMonthlyTrend: (months: number = 6) =>
     request(`/analytics/monthly-trend?months=${months}`),

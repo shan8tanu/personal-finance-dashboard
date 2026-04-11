@@ -6,18 +6,21 @@ const router = Router();
 router.get("/category-breakdown", async (req: Request, res: Response) => {
   const { month, year, accountId } = req.query;
 
-  if (!month || !year) {
-    res.status(400).json({ error: "month and year are required" });
-    return;
+  const where: any = { type: "debit" };
+
+  if (month && year) {
+    where.date = {
+      gte: new Date(parseInt(year as string), parseInt(month as string) - 1, 1),
+      lte: new Date(parseInt(year as string), parseInt(month as string), 0, 23, 59, 59),
+    };
+  } else if (year) {
+    where.date = {
+      gte: new Date(parseInt(year as string), 0, 1),
+      lte: new Date(parseInt(year as string), 11, 31, 23, 59, 59),
+    };
   }
+  // If neither → all time (no date filter, just type: "debit")
 
-  const startDate = new Date(parseInt(year as string), parseInt(month as string) - 1, 1);
-  const endDate = new Date(parseInt(year as string), parseInt(month as string), 0, 23, 59, 59);
-
-  const where: any = {
-    date: { gte: startDate, lte: endDate },
-    type: "debit",
-  };
   if (accountId) where.accountId = accountId;
 
   const transactions = await prisma.transaction.findMany({
