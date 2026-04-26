@@ -42,3 +42,7 @@ export async function parseBankStatement(filePath: string, password?: string): P
 export async function parseCreditCardStatement(filePath: string): Promise<ParseResult> {
   return runPythonScript("parse_cc_statement.py", [filePath]);
 }
+
+export async function parseXlsBankStatement(filePath: string): Promise<ParseResult> {
+  return runPythonScript("parse_bank_statement_xls.py", [filePath]);
+}

@@ -3,7 +3,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import prisma from "../db";
-import { parseBankStatement, parseCreditCardStatement } from "../services/pdfParser";
+import { parseBankStatement, parseCreditCardStatement, parseXlsBankStatement } from "../services/pdfParser";
 import { autoCategorize } from "../services/categorizer";
 import { applyTaggingRules } from "../services/taggingEngine";
 
@@ -53,7 +53,12 @@ router.post("/bank-statement", upload.single("file"), async (req: Request, res: 
   });
 
   try {
-    const result = await parseBankStatement(req.file.path, password);
+    // Detect file type by extension and route to the right parser
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const isXls = ext === ".xls" || ext === ".xlsx";
+    const result = isXls
+      ? await parseXlsBankStatement(req.file.path)
+      : await parseBankStatement(req.file.path, password);
     let importedCount = 0;
 
     for (const t of result.transactions) {

@@ -59,13 +59,23 @@ export function UploadModal({ onClose }: { onClose: () => void }) {
 
         <div style={{ marginBottom: 12 }}>
           <label style={{ display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b", marginBottom: 6 }}>
-            PDF File
+            {type === "bank" ? "File — PDF or Excel (.xls / .xlsx)" : "PDF File"}
           </label>
-          <input type="file" accept=".pdf" onChange={e => setFile(e.target.files?.[0] || null)}
-            style={{ color: "#94a3b8", fontSize: 13, width: "100%" }} />
+          <input
+            type="file"
+            accept={type === "bank" ? ".pdf,.xls,.xlsx" : ".pdf"}
+            onChange={e => { setFile(e.target.files?.[0] || null); setError(""); setResult(null); }}
+            style={{ color: "#94a3b8", fontSize: 13, width: "100%" }}
+          />
+          {type === "bank" && (
+            <p style={{ fontSize: 11, color: "#475569", marginTop: 5 }}>
+              Download from HDFC NetBanking → My Accounts → Statement as Excel, or use the password-protected monthly PDF.
+            </p>
+          )}
         </div>
 
-        {type === "bank" && (
+        {/* Password only for PDF bank statements */}
+        {type === "bank" && (!file || file.name.toLowerCase().endsWith(".pdf")) && (
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b", marginBottom: 6 }}>
               PDF Password (if encrypted)
