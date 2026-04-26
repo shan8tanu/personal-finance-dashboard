@@ -13,8 +13,9 @@ const fmt = (n: number) =>
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const YEARS = [2022, 2023, 2024, 2025, 2026];
 
-function monthLabel(ym: string) {
-  const [y, m] = ym.split("-");
+function monthLabel(ym: any) {
+  const s = String(ym ?? "");
+  const [y, m] = s.split("-");
   return `${MONTH_NAMES[parseInt(m) - 1]} '${y.slice(2)}`;
 }
 
