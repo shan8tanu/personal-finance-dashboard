@@ -17,11 +17,28 @@ export default function Settings() {
   const [catColor, setCatColor]     = useState("#6B7280");
   const [editing, setEditing]       = useState<any>(null);
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
+  const [secretVisible, setSecretVisible] = useState(false);
+  const [copiedField, setCopiedField]     = useState<"url" | "secret" | "curl" | null>(null);
 
   useEffect(() => {
     api.getCategories().then(setCategories);
-    setWebhookUrl(`${window.location.origin}/api/webhook/sms`);
+    const url = `${window.location.origin}/api/webhook/sms`;
+    setWebhookUrl(url);
+    api.getWebhookConfig().then((d: any) => setWebhookSecret(d.secret || "")).catch(() => {});
   }, []);
+
+  function copyToClipboard(text: string, field: "url" | "secret" | "curl") {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 1800);
+    });
+  }
+
+  const curlCommand = `curl -X POST ${webhookUrl} \\
+  -H "Content-Type: application/json" \\
+  -H "X-Webhook-Secret: ${webhookSecret || "<your-secret>"}" \\
+  -d '{"message":"INR 150.00 debited from A/c **8085 on 26-04-26. Info: UPI-ZOMATO-zomato@upi. UPI Ref:999888777666. Avl Bal:INR 12345.00"}'`;
 
   async function saveCategory() {
     if (editing) await api.updateCategory(editing.id, { name: catName, type: catType, color: catColor });
@@ -60,24 +77,59 @@ export default function Settings() {
           Include an <code className="px-1.5 py-0.5 rounded text-xs"
             style={{ background: "var(--color-surface-alt)", color: "var(--color-amber)" }}>
             X-Webhook-Secret
-          </code> header with your secret key.
+          </code> header with the secret shown below.
         </p>
-        <div className="flex gap-3 mb-5">
+
+        {/* Endpoint URL */}
+        <p className="label mb-2">Endpoint URL</p>
+        <div className="flex gap-3 mb-4">
           <input readOnly value={webhookUrl}
             style={{ ...iStyle, color: "var(--color-text-sub)", flex: 1 }} />
-          <button onClick={() => navigator.clipboard.writeText(webhookUrl)}
+          <button onClick={() => copyToClipboard(webhookUrl, "url")}
             className="px-5 py-2.5 rounded-lg text-sm transition-all"
-            style={{ background: "var(--color-surface-alt)", color: "var(--color-text-sub)" }}>
-            Copy
+            style={{ background: "var(--color-surface-alt)", color: copiedField === "url" ? "var(--color-green)" : "var(--color-text-sub)", minWidth: 72 }}>
+            {copiedField === "url" ? "✓ Copied" : "Copy"}
           </button>
         </div>
+
+        {/* Webhook secret */}
+        <p className="label mb-2">Webhook Secret  <span style={{ color: "var(--color-text-muted)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>— paste this into Tasker's X-Webhook-Secret header</span></p>
+        <div className="flex gap-3 mb-5">
+          <div style={{ flex: 1, position: "relative" }}>
+            <input
+              readOnly
+              type={secretVisible ? "text" : "password"}
+              value={webhookSecret || "Set WEBHOOK_SECRET in server/.env"}
+              style={{ ...iStyle, paddingRight: 44, color: webhookSecret ? "var(--color-text)" : "var(--color-text-muted)", fontFamily: secretVisible ? "monospace" : undefined }}
+            />
+            <button
+              onClick={() => setSecretVisible(v => !v)}
+              style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--color-text-muted)", fontSize: 15, padding: 0 }}
+              title={secretVisible ? "Hide" : "Show"}>
+              {secretVisible ? "🙈" : "👁"}
+            </button>
+          </div>
+          <button onClick={() => copyToClipboard(webhookSecret, "secret")} disabled={!webhookSecret}
+            className="px-5 py-2.5 rounded-lg text-sm transition-all disabled:opacity-40"
+            style={{ background: "var(--color-surface-alt)", color: copiedField === "secret" ? "var(--color-green)" : "var(--color-text-sub)", minWidth: 72 }}>
+            {copiedField === "secret" ? "✓ Copied" : "Copy"}
+          </button>
+        </div>
+
+        {/* Test curl command */}
         <div className="rounded-lg p-4" style={{ background: "var(--color-base)", border: "1px solid var(--color-border)" }}>
-          <p className="label mb-2">Example POST body</p>
-          <pre className="text-sm" style={{ color: "var(--color-text-sub)", fontFamily: "monospace", lineHeight: "1.6" }}>{`{
-  "message": "INR 1,234.56 debited from A/c **8085 on 01-04-26. UPI Ref: 123456",
-  "sender": "HDFCBK",
-  "timestamp": "2026-04-01T10:30:00Z"
-}`}</pre>
+          <div className="flex items-center justify-between mb-2">
+            <p className="label">Test with curl</p>
+            <button onClick={() => copyToClipboard(curlCommand, "curl")}
+              className="text-xs px-3 py-1 rounded transition-all"
+              style={{ background: "var(--color-surface-alt)", color: copiedField === "curl" ? "var(--color-green)" : "var(--color-text-muted)" }}>
+              {copiedField === "curl" ? "✓ Copied" : "Copy"}
+            </button>
+          </div>
+          <pre className="text-xs" style={{ color: "var(--color-text-sub)", fontFamily: "monospace", lineHeight: "1.7", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{curlCommand}</pre>
+          <p className="text-xs mt-3" style={{ color: "var(--color-text-muted)" }}>
+            A 201 response means the transaction was created. 422 = SMS format not recognized. 401 = wrong secret.
+          </p>
         </div>
       </div>
 

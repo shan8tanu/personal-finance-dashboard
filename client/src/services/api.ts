@@ -98,6 +98,9 @@ export const api = {
   getMonthlyTrend: (months: number = 6) =>
     request(`/analytics/monthly-trend?months=${months}`),
 
+  // Webhook
+  getWebhookConfig: () => request("/webhook/config"),
+
   // Upload
   uploadBankStatement: (file: File, password?: string, accountId?: string) => {
     const formData = new FormData();

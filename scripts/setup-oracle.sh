@@ -11,7 +11,7 @@ sudo apt-get update -y
 sudo apt-get install -y curl git unzip python3 python3-pip
 
 # pdfplumber dependencies
-pip3 install --user pdfplumber
+pip3 install --user pdfplumber pikepdf xlrd openpyxl
 
 # ── 2. Node.js 20 LTS ────────────────────────────────────────────────────────
 echo "[2/7] Installing Node.js 20..."

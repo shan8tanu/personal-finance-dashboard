@@ -159,6 +159,7 @@ NODE_ENV=production
 PORT=3001
 ALLOWED_ORIGIN=https://finance.yourdomain.com
 JWT_SECRET=<run: openssl rand -base64 48>
+WEBHOOK_SECRET=<run: openssl rand -base64 32>
 DATABASE_URL="file:./prisma/finance.db"
 ```
 
@@ -207,15 +208,57 @@ curl -X POST "$URL/api/upload/json" \
 
 ## Part 6 — SMS Webhook (HDFC Alerts)
 
-MacroDroid (Android):
+Every HDFC transaction SMS is automatically forwarded to the webhook and appears in Findash
+within seconds. The endpoint accepts both UPI, NEFT, and ATM withdrawal alerts.
+
+Your `WEBHOOK_SECRET` is shown (and copyable) from the **Settings** page after you log in.
+
+### Part 6a — MacroDroid (Android)
+
 ```
-Trigger:  SMS Received — body contains "debited from A/c"
+Trigger:  SMS Received — body contains "debited from A/c" OR "credited to A/c"
 Action:   HTTP Request
   URL:    https://finance.yourdomain.com/api/webhook/sms
   Method: POST
-  Headers: Content-Type: application/json
-  Body:   {"body": "[sms_body]", "sender": "[sms_sender]"}
+  Headers:
+    Content-Type: application/json
+    X-Webhook-Secret: <your WEBHOOK_SECRET from Settings>
+  Body:   {"message": "[sms_body]", "sender": "[sms_sender]"}
 ```
+
+> **Note:** Use `"message"` (not `"body"`) as the JSON field name.
+
+### Part 6b — Tasker (Android)
+
+Install **Tasker** from the Play Store.
+
+#### Profile
+New Profile → **Event → Phone → Received SMS**
+- Sender filter: `HDFCBK` (or leave blank to catch all senders)
+- Content filter: `*from A/c*` (matches both debit and credit alerts)
+
+#### Task — "Findash Webhook"
+1. **Net → HTTP Request**
+   - Method: `POST`
+   - URL: `https://finance.yourdomain.com/api/webhook/sms`
+   - Headers:
+     ```
+     Content-Type: application/json
+     X-Webhook-Secret: <your WEBHOOK_SECRET from Settings>
+     ```
+   - Body:
+     ```json
+     {"message":"%SMSRB","sender":"%SMSFN"}
+     ```
+   (`%SMSRB` = SMS body, `%SMSFN` = sender name — Tasker built-in variables)
+
+2. **Flash → %HTTPR** *(optional — shows HTTP response code on screen for debugging)*
+
+#### Testing
+Use the **Test with curl** command on the Settings page to send a mock transaction.
+- `201` → transaction created ✓
+- `422` → SMS format not recognized (check the message field)
+- `401` → wrong secret
 
 ---
 
