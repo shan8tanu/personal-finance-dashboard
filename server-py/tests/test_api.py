@@ -81,3 +81,21 @@ def test_patch_category_marks_manual(client, auth):
 def test_transaction_type_filter(client, auth):
     res = client.get("/api/transactions?type=debit&limit=100", headers=auth).json()
     assert all(t["type"] == "debit" for t in res["transactions"])
+
+
+def test_webhook_accepts_raw_and_broken_json(client, auth):
+    """Tasker sends multi-line SMS that breaks JSON escaping; webhook must still parse."""
+    hdr = {"X-Webhook-Secret": "test-webhook-secret"}
+    # raw plain-text body (no JSON wrapper) — newer 'Sent' format
+    raw = ("Sent Rs.12.00\nFrom HDFC Bank A/C *8085\nTo MAX GROCER\n"
+           "On 07/06/26\nRef 777666555444")
+    r1 = client.post("/api/webhook/sms", headers={**hdr, "Content-Type": "text/plain"}, content=raw)
+    assert r1.status_code == 201
+
+    # invalid JSON (literal newlines inside the string, exactly what Tasker emits)
+    broken = '{"message":"Sent Rs.13.00\nFrom HDFC Bank A/C *8085\nTo CAB RIDE\nOn 07/06/26\nRef 222333444555"}'
+    r2 = client.post("/api/webhook/sms", headers={**hdr, "Content-Type": "application/json"}, content=broken)
+    assert r2.status_code == 201
+
+    found = client.get("/api/transactions?search=MAX GROCER", headers=auth).json()["transactions"]
+    assert any(t["referenceNumber"] == "777666555444" for t in found)

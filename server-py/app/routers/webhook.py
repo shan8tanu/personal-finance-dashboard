@@ -1,8 +1,8 @@
 import re
+import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session, select
 
 from ..database import engine
@@ -85,16 +85,27 @@ def parse_hdfc_sms(message: str) -> dict | None:
     return None
 
 
-class SmsBody(BaseModel):
-    message: str | None = None
-    body: str | None = None
-    sender: str | None = None
-    timestamp: str | None = None
+def _extract_message(raw: str) -> str:
+    """Accept either JSON ({"message"/"body": ...}) or the raw SMS text as the body.
+    Phone automations (Tasker) can't reliably JSON-escape multi-line SMS, so we
+    fall back to treating the whole body as the message — the parser scans it anyway."""
+    s = raw.strip()
+    if s.startswith("{"):
+        try:
+            d = json.loads(s)
+            if isinstance(d, dict):
+                msg = d.get("message") or d.get("body")
+                if msg:
+                    return msg
+        except Exception:
+            pass  # invalid JSON (e.g. unescaped newlines) → use raw text below
+    return s
 
 
 @router.post("/sms", status_code=201)
-def receive_sms(body: SmsBody, _=Depends(webhook_auth)):
-    message = body.message or body.body
+async def receive_sms(request: Request, _=Depends(webhook_auth)):
+    raw = (await request.body()).decode("utf-8", "replace")
+    message = _extract_message(raw)
     if not message:
         raise HTTPException(400, "message is required")
 
