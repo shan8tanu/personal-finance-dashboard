@@ -59,3 +59,26 @@ def test_sms_atm_counterparty():
 
 def test_sms_unparseable():
     assert parse_hdfc_sms("random text") is None
+
+
+def test_sms_sent_upi_format():
+    msg = ("Sent Rs.1.00\nFrom HDFC Bank A/C *8085\nTo SHAMBHAVI  JAHAGIRDAR\n"
+           "On 07/06/26\nRef 124327769001\nNot You?\nCall 18002586161")
+    p = parse_hdfc_sms(msg)
+    assert p["type"] == "debit"
+    assert p["amount"] == 1.0
+    assert p["account"] == "8085"
+    assert p["reference"] == "124327769001"
+    assert p["counterparty"] == "Shambhavi Jahagirdar"
+    assert p["date"] == "07/06/26"
+
+
+def test_sms_received_upi_format():
+    msg = ("Received Rs.500.00 in HDFC Bank A/C *8085 from JOHN DOE On 07/06/26 Ref 998877665544")
+    p = parse_hdfc_sms(msg)
+    assert p["type"] == "credit"
+    assert p["amount"] == 500.0
+    assert p["account"] == "8085"
+    assert p["reference"] == "998877665544"
+    assert p["counterparty"] == "John Doe"
+    assert p["date"] == "07/06/26"

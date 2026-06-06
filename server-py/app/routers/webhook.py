@@ -14,22 +14,38 @@ from ..services.categorizer import auto_categorize
 
 router = APIRouter()
 
+_DATE = r"(\d{2}[-/]\d{2}[-/]\d{2,4})"
+
+# Legacy format: "INR 1,234.56 debited from A/c **8085 on 01-04-26. Info: UPI-..."
 _DEBIT = re.compile(
-    r"(?:INR|Rs\.?)\s*([\d,]+\.?\d*)\s*debited\s*from\s*(?:A/c|a/c)\s*\*+(\d+)\s*on\s*(\d{2}-\d{2}-\d{2})",
+    r"(?:INR|Rs\.?)\s*([\d,]+\.?\d*)\s*debited\s*from\s*A/c\s*\*+(\d+)\s*on\s*" + _DATE,
     re.IGNORECASE)
 _CREDIT = re.compile(
-    r"(?:INR|Rs\.?)\s*([\d,]+\.?\d*)\s*credited\s*to\s*(?:A/c|a/c)\s*\*+(\d+)\s*on\s*(\d{2}-\d{2}-\d{2})",
+    r"(?:INR|Rs\.?)\s*([\d,]+\.?\d*)\s*credited\s*to\s*A/c\s*\*+(\d+)\s*on\s*" + _DATE,
     re.IGNORECASE)
-_REF = re.compile(r"(?:UPI\s*Ref|Ref\s*No)[:\s]*(\d+)", re.IGNORECASE)
+# Newer UPI format: "Sent Rs.1.00 From HDFC Bank A/C *8085 To NAME On 07/06/26 Ref 12..."
+_SENT = re.compile(
+    r"Sent\s+(?:INR|Rs\.?)\s*([\d,]+\.?\d*)\s+From\s+HDFC\s*Bank\s+A/?[Cc]\s+\*+(\d+)\s+To\s+(.+?)\s+On\s+" + _DATE,
+    re.IGNORECASE | re.DOTALL)
+# "Received Rs.X in HDFC Bank A/C *8085 from NAME On DD/MM/YY Ref ..."
+_RECEIVED = re.compile(
+    r"Received\s+(?:INR|Rs\.?)\s*([\d,]+\.?\d*)\s+in\s+HDFC\s*Bank\s+A/?[Cc]\s+\*+(\d+)\s+from\s+(.+?)\s+On\s+" + _DATE,
+    re.IGNORECASE | re.DOTALL)
+
+_REF = re.compile(r"Ref(?:erence)?(?:\s*No)?\s*[:.]?\s*(\d{6,})", re.IGNORECASE)
 _INFO = re.compile(r"Info:\s*(.+?)(?:\.\s*(?:UPI Ref|Avl Bal)|$)", re.IGNORECASE)
 _UPI = re.compile(r"UPI-(.+?)(?:-[\w.]+@\w+|-\d{9,}|$)", re.IGNORECASE)
 _NEFT = re.compile(r"(?:NEFT|IMPS)[DC]?R?-\w+-(.+?)(?:-|$)", re.IGNORECASE)
 
 
+def _clean_name(raw: str) -> str:
+    return re.sub(r"\s+", " ", raw).strip().title()
+
+
 def parse_hdfc_sms(message: str) -> dict | None:
+    # Counterparty from the legacy "Info: UPI-..." narration, if present.
     info = _INFO.search(message)
     narration = info.group(1).strip() if info else ""
-
     counterparty = None
     m = _UPI.search(narration)
     if m:
@@ -41,19 +57,31 @@ def parse_hdfc_sms(message: str) -> dict | None:
         if nm:
             counterparty = nm.group(1).strip()
 
-    for rx, kind in ((_DEBIT, "debit"), (_CREDIT, "credit")):
+    # (regex, type, group index of counterparty name or None)
+    for rx, kind, name_grp in (
+        (_DEBIT, "debit", None), (_CREDIT, "credit", None),
+        (_SENT, "debit", 3), (_RECEIVED, "credit", 3),
+    ):
         mm = rx.search(message)
-        if mm:
-            ref = _REF.search(message)
-            return {
-                "amount": float(mm.group(1).replace(",", "")),
-                "type": kind,
-                "account": mm.group(2),
-                "reference": ref.group(1) if ref else f"SMS-{int(datetime.now().timestamp() * 1000)}",
-                "date": mm.group(3),
-                "description": narration or message[:200],
-                "counterparty": counterparty,
-            }
+        if not mm:
+            continue
+        if name_grp and not counterparty:
+            counterparty = _clean_name(mm.group(name_grp))
+        ref = _REF.search(message)
+        if name_grp:
+            verb = "Sent to" if kind == "debit" else "Received from"
+            description = narration or (f"UPI {verb} {counterparty}" if counterparty else message[:200])
+        else:
+            description = narration or message[:200]
+        return {
+            "amount": float(mm.group(1).replace(",", "")),
+            "type": kind,
+            "account": mm.group(2),
+            "reference": ref.group(1) if ref else f"SMS-{int(datetime.now().timestamp() * 1000)}",
+            "date": mm.group(mm.lastindex),  # date is always the last capture group
+            "description": description,
+            "counterparty": counterparty,
+        }
     return None
 
 
@@ -92,8 +120,11 @@ def receive_sms(body: SmsBody, _=Depends(webhook_auth)):
 
         category_id = auto_categorize(s, parsed["description"], parsed["counterparty"])
 
-        d, mo, y = parsed["date"].split("-")
-        full_year = 1900 + int(y) if int(y) > 50 else 2000 + int(y)
+        d, mo, y = re.split(r"[-/]", parsed["date"])
+        if len(y) == 4:
+            full_year = int(y)
+        else:
+            full_year = 2000 + int(y) if int(y) <= 68 else 1900 + int(y)
         date_iso = iso_date(datetime(full_year, int(mo), int(d)))
 
         now = iso_now()
