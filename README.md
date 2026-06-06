@@ -97,16 +97,16 @@ Runs fully locally — your data never leaves your machine.
 | Deployment | Single Docker image (Node builds client, Python serves all) |
 | Font / Theme | Inter, slate dark palette (`#0f172a` base) |
 
-> The backend was migrated from Node/Express to FastAPI (see `server-py/README.md`).
-> The legacy Node server under `server/` is kept temporarily as a fallback.
+> The backend is Python/FastAPI under `server-py/` (migrated from the original
+> Node/Express). See `server-py/README.md` for backend details.
 
 ---
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+
-- Python 3.10+ (for statement parsing only)
+- Python 3.11+
+- Node.js 18+ (to build the React client)
 
 ### 1. Clone
 
@@ -118,8 +118,8 @@ cd personal-finance-dashboard
 ### 2. Install dependencies
 
 ```bash
-# Server
-cd server && npm install
+# Backend
+cd server-py && pip install -r requirements.txt
 
 # Client
 cd ../client && npm install
@@ -127,47 +127,45 @@ cd ../client && npm install
 
 ### 3. Configure environment
 
-```bash
-cp server/.env.example server/.env   # if example exists, else create manually
-```
-
-Edit `server/.env`:
+Create `server-py/.env`:
 
 ```env
 DATABASE_URL="file:./dev.db"
 JWT_SECRET="your-random-secret-here"
+WEBHOOK_SECRET="your-webhook-secret"
 AUTH_USERNAME="yourname"
 AUTH_PASSWORD_HASH="<bcrypt hash of your password>"
 PORT=3001
 ```
 
-Generate a bcrypt hash for your password:
+Generate a bcrypt hash:
 ```bash
-node -e "const b=require('bcryptjs'); b.hash('yourpassword',10).then(console.log)"
+python -c "import bcrypt; print(bcrypt.hashpw(b'yourpassword', bcrypt.gensalt()).decode())"
 ```
 
-### 4. Set up the database
+### 4. Seed the database (fresh install)
 
 ```bash
-cd server
-npx prisma migrate dev
-npx prisma generate
-npm run seed   # optional: seeds categories and sample rules
+cd server-py && python seed.py   # creates tables + default categories
 ```
 
-### 5. Run
-
-Open two terminals:
+### 5. Run (development)
 
 ```bash
 # Terminal 1 — backend
-cd server && npm run dev
+cd server-py && uvicorn app.main:app --reload --port 8000
 
-# Terminal 2 — frontend
-cd client && npm run dev
+# Terminal 2 — frontend (proxies /api to the backend)
+cd client && VITE_API_URL=http://localhost:8000 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) and sign in with your configured credentials.
+Open [http://localhost:5173](http://localhost:5173) and sign in.
+
+### Or run everything with Docker (production-style)
+
+```bash
+docker compose up -d --build      # http://localhost:3001
+```
 
 ---
 
@@ -176,7 +174,7 @@ Open [http://localhost:5173](http://localhost:5173) and sign in with your config
 The easiest path is the UI — click **+ Upload Statement** in the sidebar (or on the
 Credit Card page) and drop in an HDFC PDF or Excel (`.xls` / `.xlsx`) statement.
 
-Under the hood, statements are parsed by the Python parsers in `server/src/parsers/`:
+Under the hood, statements are parsed by the Python parsers in `server-py/parsers/`:
 
 | File | Handles |
 |---|---|
@@ -198,13 +196,17 @@ you don't run them by hand.
 │       ├── pages/           # Dashboard, Transactions, CreditCard, Investments, …
 │       ├── components/      # Layout, UploadModal
 │       └── services/api.ts  # Typed API client
-├── server/                  # Express backend
-│   └── src/
-│       ├── routes/          # transactions, analytics, auth, upload, …
-│       ├── middleware/       # JWT auth
-│       └── generated/       # Prisma client
-│       └── parsers/         # Python statement parsers (PDF + Excel)
-└── docs/screenshots/        # UI screenshots
+├── server-py/               # Python / FastAPI backend
+│   ├── app/
+│   │   ├── routers/         # transactions, analytics, auth, upload, webhook, …
+│   │   ├── services/        # categorizer + tagging engine
+│   │   ├── models.py        # SQLModel schema
+│   │   └── main.py          # app entry (CORS, routes, SPA serving)
+│   ├── parsers/             # Python statement parsers (PDF + Excel)
+│   ├── seed.py              # DB init + default categories
+│   └── tests/               # pytest suite
+├── Dockerfile               # single-image build (Node builds client, Python serves)
+└── docs/                    # PROJECT-OVERVIEW.md + screenshots
 ```
 
 ---

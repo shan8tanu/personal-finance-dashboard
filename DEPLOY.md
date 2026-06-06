@@ -36,17 +36,17 @@ Python + PM2" flow.
 On any host with Docker (your EC2 box, or anywhere):
 
 ```bash
-# 1. Get the code + your server/.env (with JWT_SECRET, WEBHOOK_SECRET, AUTH_*, DATABASE_URL)
+# 1. Get the code + your server-py/.env (JWT_SECRET, WEBHOOK_SECRET, AUTH_*, DATABASE_URL)
 git clone https://github.com/shan8tanu/personal-finance-dashboard.git
 cd personal-finance-dashboard
-#    copy your server/.env and server/dev.db onto the box (rsync/scp)
+#    copy your server-py/.env and server-py/dev.db onto the box (rsync/scp)
 
 # 2. Build + run
 docker compose up -d --build      # serves on http://<host>:3001
 ```
 
-`docker-compose.yml` mounts `server/.env` (read-only) and `server/dev.db` (read-write) so
-secrets aren't baked into the image and your data persists across restarts. Update with:
+`docker-compose.yml` mounts `server-py/.env` (read-only) and `server-py/dev.db` (read-write)
+so secrets aren't baked into the image and your data persists across restarts. Update with:
 
 ```bash
 git pull && docker compose up -d --build
@@ -54,8 +54,12 @@ git pull && docker compose up -d --build
 
 Then expose it with Cloudflare Tunnel exactly as in **Part 3** (point the tunnel at
 `http://localhost:3001`). The EC2 instance setup (Part 1) still applies if you don't have a
-host yet; you only need Docker installed on it (`sudo apt install docker.io docker-compose-v2`)
-instead of the Node/Python/PM2 steps.
+host yet; you only need Docker installed on it (`sudo apt install docker.io docker-compose-v2`).
+
+> **⚠️ Legacy sections below:** Parts 1–7 were written for the original Node/Express + PM2
+> backend and predate the Python/FastAPI migration. Use **Part 0 (Docker)** above as the
+> current path; the EC2/Cloudflare instructions (Parts 1, 3) still apply, but ignore the
+> Node/PM2/Prisma-specific steps. (Deployment is being re-planned for a Cloudflare subpath.)
 
 > **Local development** (no Docker) uses the Python backend directly — see `server-py/README.md`.
 

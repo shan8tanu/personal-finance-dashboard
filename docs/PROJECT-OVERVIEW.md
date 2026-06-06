@@ -8,12 +8,13 @@
 
 > **⚠️ Architecture update (2026-06-06):** The backend has been migrated from
 > Node/Express to **Python/FastAPI** (`server-py/`) as part of Phases 1 & 2 of the
-> simplification roadmap (§12). Parsers are now imported directly (no subprocess),
-> the SMS webhook is a native route, and deployment is via a single Docker image.
-> The FastAPI backend was verified to return byte-identical output to the old Node
-> server across all read endpoints on the real 2,770-row DB, and has a pytest suite.
-> The old `server/` (Node) is kept temporarily as a fallback. Sections below
-> describe the original design; see `server-py/README.md` for the new backend.
+> simplification roadmap (§12). Parsers are imported directly (no subprocess), the
+> SMS webhook is a native route, and deployment is via a single Docker image. The
+> FastAPI backend was verified byte-identical to the old Node server across all read
+> endpoints on the real DB, and has a pytest suite. **The Node `server/` has been
+> removed** — config (`.env`), the SQLite DB, and parsers now live under `server-py/`.
+> Sections below describe the original design; see `server-py/README.md` for the
+> current backend.
 
 ---
 
@@ -264,10 +265,12 @@ Sequenced so the safe, high-value work happens first.
 - ✅ Swapped Prisma for **SQLModel** over the *same* SQLite file (no migration).
 - ✅ Verified byte-identical output vs. the old Node server across all read endpoints on the
   real 2,770-row DB (differential testing).
+- ✅ Removed the old Node `server/` (confirmed working in the browser). Config, DB, and
+  parsers consolidated under `server-py/`.
 - ⏳ **Follow-up:** the two categorization engines (§9) were ported faithfully but **not yet
   merged** — regex rules can't all be expressed as substring DB rules, so merging needs care.
-- ⏳ **Follow-up:** remove the old Node `server/` once the Python backend is confirmed in the
-  browser. (Kept temporarily as a fallback.)
+- ⏳ **Follow-up:** recurring-SI reference numbers reuse (PPF/SIP) — statement import now
+  disambiguates by date, but a composite dedup key (accountId, ref, date) would be cleaner.
 
 > Rejected: a full **Streamlit** rewrite — it can't cleanly host the `POST /api/webhook/sms`
 > endpoint (would *add* a process), regresses the mobile UI, and is the highest-risk path.
@@ -276,11 +279,10 @@ Sequenced so the safe, high-value work happens first.
 
 ## 13. Running & deploying
 
-- **Dev (new Python backend):** `cd server-py && uvicorn app.main:app --reload --port 8000`
+- **Dev (Python backend):** `cd server-py && uvicorn app.main:app --reload --port 8000`
   + `cd client && VITE_API_URL=http://localhost:8000 npm run dev` → http://localhost:5173
 - **Test:** `cd server-py && pytest`
+- **Seed (one-time, fresh DB):** `cd server-py && python seed.py`
 - **Deploy (recommended):** `docker compose up -d --build` (single image, see `DEPLOY.md`)
-- **Seed (one-time, still via Node/Prisma):** `cd server && npm run seed`
-- **Env (`server/.env`):** `JWT_SECRET`, `WEBHOOK_SECRET`, `AUTH_USERNAME`,
+- **Env (`server-py/.env`):** `JWT_SECRET`, `WEBHOOK_SECRET`, `AUTH_USERNAME`,
   `AUTH_PASSWORD_HASH`, `DATABASE_URL`, `PORT`, `ALLOWED_ORIGIN`
-- **Legacy Node backend (fallback):** `cd server && npm run dev` (port 3001)

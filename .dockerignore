@@ -7,13 +7,14 @@
 **/.venv
 .git
 .github
+.claude
 docs
 *.md
-server/src/generated
 uploads
 logs
 output.json
 # DB and secrets are mounted at runtime, not baked into the image
-server/*.db
-server/prisma/*.db
+**/*.db
+**/*.db-journal
+**/*.bak-*
 **/.env

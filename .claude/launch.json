@@ -8,6 +8,14 @@
       "port": 5173,
       "autoPort": false,
       "cwd": "client"
+    },
+    {
+      "name": "findash-py",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set NODE_ENV=production&& python -m uvicorn app.main:app --port 8000"],
+      "port": 8000,
+      "autoPort": false,
+      "cwd": "server-py"
     }
   ]
 }

@@ -17,13 +17,12 @@ WORKDIR /app
 COPY server-py/requirements.txt ./server-py/requirements.txt
 RUN pip install --no-cache-dir -r server-py/requirements.txt
 
-# App code + parsers + built client (preserving the repo layout config.py expects:
-#   /app/server-py, /app/server/src/parsers, /app/client/dist)
+# App code (incl. parsers under server-py/parsers) + built client.
+# .env and the SQLite DB are excluded via .dockerignore and mounted at runtime.
 COPY server-py/ ./server-py/
-COPY server/src/parsers/ ./server/src/parsers/
 COPY --from=client-build /client/dist ./client/dist
 
 EXPOSE 3001
 WORKDIR /app/server-py
-# server/.env and the SQLite DB are mounted at runtime (see docker-compose.yml)
+# server-py/.env and the SQLite DB are mounted at runtime (see docker-compose.yml)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "3001"]
