@@ -169,20 +169,19 @@ Open [http://localhost:5173](http://localhost:5173) and sign in with your config
 
 ## Importing Bank Statements
 
-Statements are parsed with the Python pipeline in `pdf-to-md/`:
+The easiest path is the UI — click **+ Upload Statement** in the sidebar (or on the
+Credit Card page) and drop in an HDFC PDF or Excel (`.xls` / `.xlsx`) statement.
 
-```bash
-cd pdf-to-md
-pip install -r requirements.txt
+Under the hood, statements are parsed by the Python parsers in `server/src/parsers/`:
 
-# Parse an HDFC savings account PDF
-python parse.py --file path/to/statement.pdf --type savings
+| File | Handles |
+|---|---|
+| `parse_bank_statement.py` | HDFC savings account PDF |
+| `parse_bank_statement_xls.py` | HDFC savings account Excel (`.xls` / `.xlsx`) |
+| `parse_cc_statement.py` | HDFC credit-card PDF |
 
-# Parse an HDFC credit card PDF
-python parse.py --file path/to/statement.pdf --type credit
-```
-
-Or upload directly from the UI — click **+ Upload Statement** in the sidebar or on the Credit Card page.
+The backend invokes the right parser automatically based on file type and account, so
+you don't run them by hand.
 
 ---
 
@@ -200,7 +199,7 @@ Or upload directly from the UI — click **+ Upload Statement** in the sidebar o
 │       ├── routes/          # transactions, analytics, auth, upload, …
 │       ├── middleware/       # JWT auth
 │       └── generated/       # Prisma client
-├── pdf-to-md/               # Python PDF parser
+│       └── parsers/         # Python statement parsers (PDF + Excel)
 └── docs/screenshots/        # UI screenshots
 ```
 

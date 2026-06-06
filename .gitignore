@@ -7,3 +7,10 @@ uploads/
 logs/
 output.json
 type_corrections.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
