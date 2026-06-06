@@ -4,7 +4,16 @@
 > backlog of unfinished work and the simplification roadmap. Written to help plan
 > new features without re-reading the whole codebase.
 >
-> Last updated: 2026-06-03
+> Last updated: 2026-06-06
+
+> **⚠️ Architecture update (2026-06-06):** The backend has been migrated from
+> Node/Express to **Python/FastAPI** (`server-py/`) as part of Phases 1 & 2 of the
+> simplification roadmap (§12). Parsers are now imported directly (no subprocess),
+> the SMS webhook is a native route, and deployment is via a single Docker image.
+> The FastAPI backend was verified to return byte-identical output to the old Node
+> server across all read endpoints on the real 2,770-row DB, and has a pytest suite.
+> The old `server/` (Node) is kept temporarily as a fallback. Sections below
+> describe the original design; see `server-py/README.md` for the new backend.
 
 ---
 
@@ -241,23 +250,24 @@ cleanup and a feature** — it would let you edit every rule from the UI instead
 Goal: reduce moving parts (deployment + languages) **without breaking working features**.
 Sequenced so the safe, high-value work happens first.
 
-### Phase 1 — Clean up + containerize (near-zero risk)
-- Remove the unused embedded `pdf-to-md/` repo from this tree; fix the README import section.
-- Add a **single Docker image** (Node + Python + built React) + compose file → deployment
-  becomes `docker compose up` instead of manual multi-runtime setup. **Kills concern A.**
-- Add a **test net** around the Python parsers and the import/dedup + categorization logic.
-  **Defuses concern B.**
-- Keep this `PROJECT-OVERVIEW.md` current as the architecture reference.
-- *Runtime behavior unchanged.*
+### Phase 1 — Clean up + containerize  ✅ DONE (2026-06-06)
+- ✅ Removed the unused embedded `pdf-to-md/` repo; fixed the README import section.
+- ✅ Added a **single Docker image** (`Dockerfile` + `docker-compose.yml`) — Node builds the
+  client, Python runs everything → deploy with `docker compose up`. **Kills concern A.**
+- ✅ Added a **pytest test net** (`server-py/tests/`) over the API, categorizer, SMS parser,
+  and parser bridge. **Defuses concern B.**
+- ✅ `__pycache__` etc. added to `.gitignore`.
 
-### Phase 2 — Consolidate the backend to one language (medium risk, optional)
-- Replace the Express/TypeScript server with **Python (FastAPI)** so parsers become direct
-  imports (no subprocess), the SMS webhook stays a native route, and the React UI is
-  untouched. Backend becomes 100% Python. **Kills concern D.**
-- Swap Prisma for a Python ORM (e.g. SQLModel/SQLAlchemy) over the same SQLite file.
-- Migrate **route-by-route behind the same `/api` contract**, with Phase 1's tests as the
-  guardrail — not a big-bang rewrite.
-- Fold the two categorization engines into one DB-backed system (§9) during the move.
+### Phase 2 — Consolidate the backend to one language (FastAPI)  ✅ DONE (2026-06-06)
+- ✅ Replaced Express/TypeScript with **Python/FastAPI** (`server-py/`): parsers imported
+  directly (no subprocess), SMS webhook is a native route, React UI untouched. **Kills D.**
+- ✅ Swapped Prisma for **SQLModel** over the *same* SQLite file (no migration).
+- ✅ Verified byte-identical output vs. the old Node server across all read endpoints on the
+  real 2,770-row DB (differential testing).
+- ⏳ **Follow-up:** the two categorization engines (§9) were ported faithfully but **not yet
+  merged** — regex rules can't all be expressed as substring DB rules, so merging needs care.
+- ⏳ **Follow-up:** remove the old Node `server/` once the Python backend is confirmed in the
+  browser. (Kept temporarily as a fallback.)
 
 > Rejected: a full **Streamlit** rewrite — it can't cleanly host the `POST /api/webhook/sms`
 > endpoint (would *add* a process), regresses the mobile UI, and is the highest-risk path.
@@ -266,9 +276,11 @@ Sequenced so the safe, high-value work happens first.
 
 ## 13. Running & deploying
 
-- **Dev:** `cd server && npm run dev` + `cd client && npm run dev` → http://localhost:5173
-- **Build:** `npm run build` (root) builds client then server
-- **Seed:** `cd server && npm run seed`
-- **Deploy:** see `DEPLOY.md` (EC2 + Cloudflare Tunnel; PM2 via `ecosystem.config.js`)
+- **Dev (new Python backend):** `cd server-py && uvicorn app.main:app --reload --port 8000`
+  + `cd client && VITE_API_URL=http://localhost:8000 npm run dev` → http://localhost:5173
+- **Test:** `cd server-py && pytest`
+- **Deploy (recommended):** `docker compose up -d --build` (single image, see `DEPLOY.md`)
+- **Seed (one-time, still via Node/Prisma):** `cd server && npm run seed`
 - **Env (`server/.env`):** `JWT_SECRET`, `WEBHOOK_SECRET`, `AUTH_USERNAME`,
   `AUTH_PASSWORD_HASH`, `DATABASE_URL`, `PORT`, `ALLOWED_ORIGIN`
+- **Legacy Node backend (fallback):** `cd server && npm run dev` (port 3001)

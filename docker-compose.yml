@@ -1,0 +1,14 @@
+services:
+  findash:
+    build: .
+    image: findash
+    container_name: findash
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      # Secrets/config — read-only. JWT_SECRET, WEBHOOK_SECRET, AUTH_*, DATABASE_URL.
+      - ./server/.env:/app/server/.env:ro
+      # SQLite database — read-write so data persists across restarts.
+      # DATABASE_URL=file:./dev.db resolves to /app/server/dev.db.
+      - ./server/dev.db:/app/server/dev.db

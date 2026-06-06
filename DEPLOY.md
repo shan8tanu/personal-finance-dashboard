@@ -27,6 +27,40 @@ Your Laptop  (PDF parsing stays local)
 
 ---
 
+## Part 0 — Deploy with Docker (recommended)
+
+The app now ships as a **single Docker image** (Node builds the React client; Python/FastAPI
+serves the API + the built client on one port). This replaces the manual "install Node +
+Python + PM2" flow.
+
+On any host with Docker (your EC2 box, or anywhere):
+
+```bash
+# 1. Get the code + your server/.env (with JWT_SECRET, WEBHOOK_SECRET, AUTH_*, DATABASE_URL)
+git clone https://github.com/shan8tanu/personal-finance-dashboard.git
+cd personal-finance-dashboard
+#    copy your server/.env and server/dev.db onto the box (rsync/scp)
+
+# 2. Build + run
+docker compose up -d --build      # serves on http://<host>:3001
+```
+
+`docker-compose.yml` mounts `server/.env` (read-only) and `server/dev.db` (read-write) so
+secrets aren't baked into the image and your data persists across restarts. Update with:
+
+```bash
+git pull && docker compose up -d --build
+```
+
+Then expose it with Cloudflare Tunnel exactly as in **Part 3** (point the tunnel at
+`http://localhost:3001`). The EC2 instance setup (Part 1) still applies if you don't have a
+host yet; you only need Docker installed on it (`sudo apt install docker.io docker-compose-v2`)
+instead of the Node/Python/PM2 steps.
+
+> **Local development** (no Docker) uses the Python backend directly — see `server-py/README.md`.
+
+---
+
 ## Part 1 — AWS EC2 Instance
 
 ### 1.1 Create the instance

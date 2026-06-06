@@ -90,11 +90,15 @@ Runs fully locally — your data never leaves your machine.
 | Layer | Technology |
 |---|---|
 | Frontend | React 19, React Router v7, Recharts, Tailwind CSS v4 |
-| Backend | Node.js, Express 5, TypeScript |
-| Database | SQLite via Prisma ORM + BetterSqlite3 adapter |
+| Backend | Python 3, FastAPI, SQLModel (`server-py/`) |
+| Database | SQLite |
 | Auth | JWT (HS256), bcrypt password hash |
-| PDF Parsing | Python 3, PyMuPDF, pandas |
+| Parsing | Python 3, pdfplumber, pandas, xlrd/openpyxl |
+| Deployment | Single Docker image (Node builds client, Python serves all) |
 | Font / Theme | Inter, slate dark palette (`#0f172a` base) |
+
+> The backend was migrated from Node/Express to FastAPI (see `server-py/README.md`).
+> The legacy Node server under `server/` is kept temporarily as a fallback.
 
 ---
 
